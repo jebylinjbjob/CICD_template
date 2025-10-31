@@ -1,7 +1,7 @@
-# ABP 專案 CodeQL 安全掃描
-# 自動偵測程式碼中的安全漏洞和程式碼品質問題
+# ABP 專案 CodeQL 安全掃描（僅 JavaScript/TypeScript）
+# 適用於尚未有 C# 程式碼的模板專案
 #
-name: 'ABP CodeQL 安全掃描'
+name: 'CodeQL 安全掃描（JS/TS）'
 
 on:
   push:
@@ -13,65 +13,47 @@ on:
 
 jobs:
   analyze:
-    name: 分析 (${{ matrix.language }})
+    name: JavaScript/TypeScript 安全掃描
     runs-on: ubuntu-latest
     permissions:
-      # required for all workflows
       security-events: write
-
-      # required to fetch internal or private CodeQL packs
       packages: read
-
-      # only required for workflows in private repositories
       actions: read
       contents: read
 
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # ABP 專案主要使用 C# 和 JavaScript/TypeScript
-          - language: csharp
-            build-mode: autobuild
-          - language: javascript-typescript
-            build-mode: none
     steps:
       - name: 取出程式碼
         uses: actions/checkout@v4
 
-      # 設定 .NET 環境（ABP 需要）
-      - name: 設定 .NET
-        if: matrix.language == 'csharp'
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      # 設定 Node.js 環境（前端資源需要）
+      # 設定 Node.js 環境
       - name: 設定 Node.js
-        if: matrix.language == 'javascript-typescript'
         uses: actions/setup-node@v4
         with:
           node-version: '18'
 
-      # 初始化 CodeQL 掃描工具
+      # 檢查是否有 JS/TS 檔案
+      - name: 檢查 JavaScript/TypeScript 檔案
+        id: check-js
+        run: |
+          if find . -name "*.js" -o -name "*.ts" -o -name "*.jsx" -o -name "*.tsx" -o -name "package.json" | head -1 | grep -q .; then
+            echo "has-js-files=true" >> $GITHUB_OUTPUT
+            echo "找到 JavaScript/TypeScript 檔案"
+          else
+            echo "has-js-files=false" >> $GITHUB_OUTPUT
+            echo "未找到 JavaScript/TypeScript 檔案，跳過掃描"
+          fi
+
+      # 初始化 CodeQL
       - name: 初始化 CodeQL
+        if: steps.check-js.outputs.has-js-files == 'true'
         uses: github/codeql-action/init@v4
         with:
-          languages: ${{ matrix.language }}
-          build-mode: ${{ matrix.build-mode }}
-          # 使用安全性和品質查詢集合
+          languages: javascript-typescript
           queries: security-and-quality
-
-      # 手動建構步驟（如果需要）
-      - name: 執行手動建構
-        if: matrix.build-mode == 'manual'
-        run: |
-          echo "執行 ABP 專案建構"
-          dotnet restore
-          dotnet build --no-restore
 
       # 執行 CodeQL 分析
       - name: 執行 CodeQL 分析
+        if: steps.check-js.outputs.has-js-files == 'true'
         uses: github/codeql-action/analyze@v4
         with:
-          category: '/language:${{matrix.language}}'
+          category: '/language:javascript-typescript'

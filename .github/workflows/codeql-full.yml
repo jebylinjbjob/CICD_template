@@ -1,0 +1,93 @@
+# ABP 專案 CodeQL 安全掃描
+# 自動偵測程式碼中的安全漏洞和程式碼品質問題
+#
+name: 'ABP CodeQL 安全掃描'
+
+on:
+  push:
+    branches: ['main']
+  pull_request:
+    branches: ['main']
+  schedule:
+    - cron: '0 2 * * 1' # 每週一凌晨 2 點執行（台北時間）
+
+jobs:
+  analyze:
+    name: 分析 (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      # required for all workflows
+      security-events: write
+
+      # required to fetch internal or private CodeQL packs
+      packages: read
+
+      # only required for workflows in private repositories
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ABP 專案主要使用 C# 和 JavaScript/TypeScript
+          - language: csharp
+            build-mode: manual
+          - language: javascript-typescript
+            build-mode: none
+    steps:
+      - name: 取出程式碼
+        uses: actions/checkout@v4
+
+      # 設定 .NET 環境（ABP 需要）
+      - name: 設定 .NET
+        if: matrix.language == 'csharp'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # 設定 Node.js 環境（前端資源需要）
+      - name: 設定 Node.js
+        if: matrix.language == 'javascript-typescript'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      # 初始化 CodeQL 掃描工具
+      - name: 初始化 CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          # 使用安全性和品質查詢集合
+          queries: security-and-quality
+
+      # 檢查是否有 C# 專案檔案
+      - name: 檢查 C# 專案
+        if: matrix.language == 'csharp'
+        id: check-csharp
+        run: |
+          if find . -name "*.csproj" -o -name "*.sln" | head -1 | grep -q .; then
+            echo "has-csharp-files=true" >> $GITHUB_OUTPUT
+            echo "找到 C# 專案檔案"
+          else
+            echo "has-csharp-files=false" >> $GITHUB_OUTPUT
+            echo "未找到 C# 專案檔案，跳過 C# 掃描"
+          fi
+
+      # 手動建構步驟（僅當有 C# 檔案時）
+      - name: 執行手動建構
+        if: matrix.build-mode == 'manual' && steps.check-csharp.outputs.has-csharp-files == 'true'
+        run: |
+          echo "執行 ABP 專案建構"
+          dotnet restore
+          dotnet build --no-restore
+
+      # 執行 CodeQL 分析
+      - name: 執行 CodeQL 分析
+        if: |
+          (matrix.language == 'csharp' && steps.check-csharp.outputs.has-csharp-files == 'true') ||
+          (matrix.language == 'javascript-typescript')
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: '/language:${{matrix.language}}'
