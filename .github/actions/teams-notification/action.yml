@@ -1,0 +1,142 @@
+name: 'Teams 通知'
+description: '發送 CI/CD 結果通知到 Microsoft Teams'
+author: 'PortalApi Team'
+
+inputs:
+  webhook_url:
+    description: 'Microsoft Teams Webhook URL'
+    required: true
+  workflow_name:
+    description: '工作流程名稱'
+    required: true
+  status:
+    description: '執行狀態 (success/failure/cancelled)'
+    required: true
+  title:
+    description: '通知標題'
+    required: false
+    default: ''
+  extra_info:
+    description: '額外資訊（選填）'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 準備通知內容
+      id: prepare
+      shell: pwsh
+      run: |
+        # 根據狀態設定顏色和圖示
+        $status = "${{ inputs.status }}"
+        $color = switch ($status) {
+          "success" { "00FF00"; break }
+          "failure" { "FF0000"; break }
+          "cancelled" { "FFA500"; break }
+          default { "808080" }
+        }
+
+        $icon = switch ($status) {
+          "success" { "✅"; break }
+          "failure" { "❌"; break }
+          "cancelled" { "⚠️"; break }
+          default { "ℹ️" }
+        }
+
+        $statusText = switch ($status) {
+          "success" { "成功"; break }
+          "failure" { "失敗"; break }
+          "cancelled" { "已取消"; break }
+          default { $status }
+        }
+
+        echo "color=$color" >> $env:GITHUB_OUTPUT
+        echo "icon=$icon" >> $env:GITHUB_OUTPUT
+        echo "status_text=$statusText" >> $env:GITHUB_OUTPUT
+
+    - name: 發送 Teams 通知
+      shell: pwsh
+      run: |
+        $webhookUrl = "${{ inputs.webhook_url }}"
+        $extraInfo = "${{ inputs.extra_info }}"
+        $customTitle = "${{ inputs.title }}"
+        $commitMessage = "${{ github.event.head_commit.message }}"
+
+        # 如果沒有自定義標題，使用 commit 訊息作為標題
+        if (-not $customTitle) {
+          $customTitle = $commitMessage
+        }
+
+        # 建立美化的訊息內容
+        $facts = @(
+          @{
+            "name" = "🔄 工作流程"
+            "value" = "${{ inputs.workflow_name }}"
+          },
+          @{
+            "name" = "📊 狀態"
+            "value" = "${{ steps.prepare.outputs.icon }} ${{ steps.prepare.outputs.status_text }}"
+          },
+          @{
+            "name" = "🌿 分支"
+            "value" = "${{ github.ref_name }}"
+          },
+          @{
+            "name" = "👤 觸發者"
+            "value" = "${{ github.actor }}"
+          },
+          @{
+            "name" = "📝 提交訊息"
+            "value" = $commitMessage
+          },
+          @{
+            "name" = "⏰ 執行時間"
+            "value" = "$([System.TimeZoneInfo]::ConvertTimeBySystemTimeZoneId((Get-Date), 'Taipei Standard Time').ToString('yyyy-MM-dd HH:mm:ss'))"
+          }
+        )
+
+        if ($extraInfo) {
+          $facts += @{
+            "name" = "ℹ️ 額外資訊"
+            "value" = $extraInfo
+          }
+        }
+
+        # 建立 Teams 訊息卡片
+        $body = @{
+          "@type" = "MessageCard"
+          "@context" = "https://schema.org/extensions"
+          "themeColor" = "${{ steps.prepare.outputs.color }}"
+          "title" = "${{ steps.prepare.outputs.icon }} $customTitle"
+          "summary" = "${{ inputs.workflow_name }} - ${{ steps.prepare.outputs.status_text }}"
+          "sections" = @(
+            @{
+              "activityTitle" = "📦 ${{ github.repository }}"
+              "activitySubtitle" = "GitHub Actions 自動化通知"
+              "facts" = $facts
+            }
+          )
+          "potentialAction" = @(
+            @{
+              "@type" = "OpenUri"
+              "name" = "🔗 查看執行詳情"
+              "targets" = @(
+                @{
+                  "os" = "default"
+                  "uri" = "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                }
+              )
+            }
+          )
+        } | ConvertTo-Json -Depth 10
+
+        # 發送到 Teams
+        try {
+          $response = Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $body -ContentType 'application/json; charset=utf-8'
+          Write-Host "✅ Teams 通知發送成功" -ForegroundColor Green
+        } catch {
+          Write-Host "❌ Teams 通知發送失敗: $_" -ForegroundColor Red
+          Write-Host "Webhook URL (前10字元): $($webhookUrl.Substring(0, [Math]::Min(10, $webhookUrl.Length)))..." -ForegroundColor Yellow
+          exit 1
+        }
