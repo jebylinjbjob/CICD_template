@@ -1,0 +1,42 @@
+version: 2
+
+updates:
+  # NuGet 套件相依性更新
+  - package-ecosystem: 'nuget'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '02:00'
+      timezone: 'Asia/Taipei'
+    open-pull-requests-limit: 5
+    labels:
+      - 'dependencies'
+      - 'nuget'
+    commit-message:
+      prefix: 'deps'
+      include: 'scope'
+    groups:
+      # ABP 框架相關套件
+      abp-framework:
+        patterns:
+          - 'Volo.Abp.*'
+      # 次要和修補版本更新
+      minor-and-patch:
+        update-types:
+          - 'minor'
+          - 'patch'
+        patterns:
+          - '*'
+
+  # GitHub Actions 更新
+  - package-ecosystem: 'github-actions'
+    directory: '/.github/workflows'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '02:30'
+      timezone: 'Asia/Taipei'
+    labels:
+      - 'dependencies'
+      - 'github-actions'

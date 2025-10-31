@@ -1,0 +1,104 @@
+version: 2
+
+updates:
+  # ==========================================
+  # 1. NuGet 套件相依性更新
+  # ==========================================
+  - package-ecosystem: 'nuget'
+    directory: '/' # 從根目錄遞迴掃描所有 .csproj 檔案
+    target-branch: 'dependa' # PR 目標分支（需要先建立此分支）
+    schedule:
+      interval: 'weekly' # 每週檢查一次
+      day: 'monday' # 每週一
+      time: '02:00' # 台北時間凌晨 2 點
+      timezone: 'Asia/Taipei'
+    open-pull-requests-limit: 10 # 同時最多開啟 10 個 PR
+    rebase-strategy: 'auto' # 自動 rebase 過時的 PR
+    labels:
+      - 'dependencies'
+      - 'automated'
+      - 'nuget'
+    commit-message:
+      prefix: 'deps' # commit 訊息前綴
+      include: 'scope' # 包含套件範圍
+    groups:
+      # 分組：次要版本和修補版本更新
+      nuget-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - 'minor'
+          - 'patch'
+        patterns:
+          - '*' # 包含所有套件
+      # 分組：主要版本更新（僅建立 PR，不自動合併）
+      nuget-major:
+        applies-to: version-updates
+        update-types:
+          - 'major'
+        patterns:
+          - '*'
+
+  # ==========================================
+  # 2. GitHub Actions 更新
+  # ==========================================
+  - package-ecosystem: 'github-actions'
+    directory: '/.github/workflows'
+    target-branch: 'dependa' # PR 目標分支（需要先建立此分支）
+    schedule:
+      interval: 'weekly' # 每週檢查一次
+      day: 'monday' # 每週一
+      time: '02:30' # 台北時間凌晨 2:30
+      timezone: 'Asia/Taipei'
+    open-pull-requests-limit: 10 # 同時最多開啟 10 個 PR
+    rebase-strategy: 'auto'
+    labels:
+      - 'dependencies'
+      - 'automated'
+      - 'github-actions'
+    commit-message:
+      prefix: 'chore'
+      include: 'scope'
+    groups:
+      # 次要版本和修補版本更新
+      ghactions-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - 'minor'
+          - 'patch'
+        patterns:
+          - '*'
+      # 主要版本更新（僅建立 PR，不自動合併）
+      ghactions-major:
+        applies-to: version-updates
+        update-types:
+          - 'major'
+        patterns:
+          - '*'
+# ==========================================
+# 注意事項：
+# ==========================================
+# 1. 私有 NuGet 來源（nuget.abp.io）：
+#    - 如需 Dependabot 存取私有來源，需要在 GitHub 設定中
+#      新增 NuGet registry 認證
+#    - 路徑：Settings → Secrets and variables → Actions → Dependabot secrets
+#
+# 2. 更新策略：
+#    - ✅ 對所有版本型別（major/minor/patch）建立 PR（不自動合併）
+#    - 🙌 由人為審查決定是否合併，確保穩定與可控
+#
+# 3. 分組功能：
+#    - nuget-minor-patch：NuGet 小版本更新（一個 PR 包含所有）
+#    - ghactions-minor-patch：GitHub Actions 小版本更新（一個 PR 包含所有）
+#
+# 4. 標籤使用：
+#    - 所有自動化 PR 都會加上 "dependencies" 和 "automated" 標籤
+#    - 可以根據標籤設定審查規則或自動合併條件
+#
+# 5. 如果某個套件造成問題，可以加入 ignore 清單：
+#    ignore:
+#      - dependency-name: "PackageName"
+#
+# 6. 專案上線後若要啟用主要版本更新：
+#    - 移除 ignore 區塊中的 major 限制
+#    - 新增 nuget-major 和 ghactions-major 分組
+#    - 建議在非上線期間進行評估和測試
