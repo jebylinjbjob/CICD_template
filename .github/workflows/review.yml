@@ -1,0 +1,159 @@
+# Pull Request 自動化檢查和審查工作流程
+# 當建立或更新 PR 時自動執行程式碼品質檢查
+name: PR Review & Quality Check
+
+# 觸發條件 - 針對所有分支的 Pull Request
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+      - 'hotfix/**'
+      - 'release/**'
+
+# 全域環境變數
+env:
+  DOTNET_VERSION: '8.0.x'
+  BUILD_CONFIGURATION: 'Release'
+  SOLUTION_PATH: 'PortalApi.sln'
+
+# 併發控制 - 取消同一 PR 的舊版執行
+concurrency:
+  group: pr-${{ github.event.number }}
+  cancel-in-progress: true
+
+jobs:
+  # === 程式碼品質檢查 ===
+  code-quality:
+    name: '程式碼品質檢查'
+    runs-on: windows-latest
+    # 跳過草稿 PR 除非明確標記
+    if: github.event.pull_request.draft == false
+
+    steps:
+      # 步驟 1: 檢出 PR 程式碼
+      - name: Checkout PR code
+        uses: actions/checkout@v5
+        with:
+          # 檢出 PR 的 HEAD，包含完整歷史記錄用於比較
+          fetch-depth: 0
+
+      # 步驟 2: 設定 .NET 環境
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # 步驟 3: 快取 NuGet 套件
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      # 步驟 4: 還原 NuGet 相依性
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.SOLUTION_PATH }}
+        shell: powershell
+
+      # 步驟 5: 建置專案
+      - name: Build solution
+        run: |
+          Write-Host "=== 建置方案 ===" -ForegroundColor Green
+          dotnet build ${{ env.SOLUTION_PATH }} --configuration ${{ env.BUILD_CONFIGURATION }} --no-restore
+        shell: powershell
+
+      # 步驟 6: 檢查 NuGet 套件授權
+      - name: Check NuGet package licenses
+        uses: jwaliszko/nuget-license-sentinel@v1
+        with:
+          solution-path: ${{ env.SOLUTION_PATH }}
+          allowed-licenses: 'MIT,Apache-2.0,BSD-3-Clause,ISC,BSD-2-Clause,MS-PL,CC0-1.0'
+          fail-on-forbidden: true
+          output-file: 'license-report.json'
+          include-project-dependencies: true
+
+
+  # === PR 狀態和評論 ===
+  pr-feedback:
+    name: 'PR 回饋'
+    permissions:
+      issues: write # 發布留言到 PR
+      contents: read # 讀取程式碼
+      pull-requests: write # 寫入 PR
+      actions: read # 讀取 Actions
+
+    runs-on: windows-latest
+    needs: code-quality
+    if: always() && github.event.pull_request.draft == false
+
+    steps:
+      # 檢出程式碼以使用本地 action
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Download test results
+        uses: actions/download-artifact@v6
+        with:
+          name: test-results
+          path: test-results
+        continue-on-error: true
+
+      - name: Generate PR comment
+        uses: actions/github-script@v8
+        with:
+          script: |
+
+            const codeQualityResult = process.env.CODE_QUALITY_RESULT ?? '${{ needs.code-quality.result }}';
+            let cqStatus = codeQualityResult;
+
+            // 建立狀態報告
+            let comment = `## 🔍 PR 自動檢查報告\n\n`;
+            comment += `**檢查時間**: ${(new Date()).toLocaleString('zh-TW')}\n`;
+            comment += `**PR**: #${{ github.event.number }} - ${{ github.event.pull_request.title }}\n`;
+            comment += `**分支**: \`${{ github.head_ref }}\` → \`${{ github.base_ref }}\`\n\n`;
+
+            comment += `### 📊 檢查結果\n\n`;
+            comment += `| 檢查項目 | 狀態 |\n`;
+            comment += `|---------|-----|\n`;
+            comment += `| 🏗️ 程式碼品質 | ${cqStatus === 'success' ? '✅ 通過' : '❌ 失敗'} |\n`;
+
+            // 可擴充如有 unitTestResult/securityResult 需要
+
+            if (cqStatus !== 'success') {
+              comment += `\n### ⚠️ 需要注意的問題\n\n`;
+              comment += `- 程式碼品質檢查失敗，請檢查建置錯誤或格式問題\n`;
+              comment += `\n請修正上述問題後重新推送程式碼。\n`;
+            } else {
+              comment += `\n### ✅ 所有檢查通過\n\n`;
+              comment += `恭喜！您的 PR 已通過所有自動檢查，可以進行程式碼審查。\n`;
+            }
+            // 發布留言到 PR
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment,
+            });
+        #以免權限不夠導致失敗
+        continue-on-error: true
+
+      # 發送 Teams 通知
+      - name: Notify Teams
+        if: always()
+        uses: ./.github/actions/teams-notification
+        with:
+          webhook_url: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          workflow_name: ${{ github.workflow }}
+          status: ${{ needs.code-quality.result }}
+          title: 'PortalApi PR #${{ github.event.number }} 審查完成'
+          extra_info: |
+            **PR 標題**: ${{ github.event.pull_request.title }}
+            **分支**: ${{ github.head_ref }} → ${{ github.base_ref }}
+            **程式碼品質**: ${{ needs.code-quality.result == 'success' && '✅ 通過' || '❌ 失敗' }}
+            **PR 連結**: ${{ github.event.pull_request.html_url }}
+        continue-on-error: true
