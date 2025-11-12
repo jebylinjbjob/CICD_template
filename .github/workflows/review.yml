@@ -19,6 +19,7 @@ env:
   BUILD_CONFIGURATION: 'Release'
   SOLUTION_PATH: 'PortalApi.sln'
 
+
 # 併發控制 - 取消同一 PR 的舊版執行
 concurrency:
   group: pr-${{ github.event.number }}
