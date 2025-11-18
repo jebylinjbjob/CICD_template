@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  postgres:
+    environment:
+      # Development environment settings
+      POSTGRES_DB: PortalApiDb_Dev
+    ports:
+      - "5433:5432"  # Use different port to avoid conflicts
+
+  portalapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: build  # Use build stage for faster iteration
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__Default=Host=postgres;Port=5432;Database=PortalApiDb_Dev;Username=postgres;Password=postgres
+      # Enable detailed errors for development
+      - Logging__LogLevel__Default=Debug
+      - Logging__LogLevel__Microsoft.AspNetCore=Information
+    ports:
+      - "5001:8080"
+    volumes:
+      # Mount source code for hot reload (optional)
+      - ./PortalApi/src/PortalApi.HttpApi.Host:/src/PortalApi/src/PortalApi.HttpApi.Host:ro
+    command: ["dotnet", "watch", "run", "--no-restore", "--project", "/src/PortalApi/src/PortalApi.HttpApi.Host/PortalApi.HttpApi.Host.csproj"]

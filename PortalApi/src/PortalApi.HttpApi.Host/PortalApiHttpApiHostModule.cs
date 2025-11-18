@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
 using PortalApi.EntityFrameworkCore;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
@@ -26,6 +27,24 @@ public class PortalApiHttpApiHostModule : AbpModule
         // Configure Controllers
         context.Services.AddControllers();
         
+        // Configure Swagger/OpenAPI
+        context.Services.AddSwaggerGen(options =>
+        {
+            options.SwaggerDoc("v1", new OpenApiInfo
+            {
+                Title = "PortalApi API",
+                Version = "v1",
+                Description = "Portal API - ABP Framework",
+                Contact = new OpenApiContact
+                {
+                    Name = "API Support",
+                    Email = "support@example.com"
+                }
+            });
+            options.DocInclusionPredicate((docName, description) => true);
+            options.CustomSchemaIds(type => type.FullName);
+        });
+        
         // Configure ABP DB Context Options
         Configure<AbpDbContextOptions>(options =>
         {
@@ -45,6 +64,14 @@ public class PortalApiHttpApiHostModule : AbpModule
         {
             app.UseDeveloperExceptionPage();
         }
+
+        // Enable Swagger middleware
+        app.UseSwagger();
+        app.UseSwaggerUI(options =>
+        {
+            options.SwaggerEndpoint("/swagger/v1/swagger.json", "PortalApi API v1");
+            options.RoutePrefix = "swagger";
+        });
 
         app.UseAbpRequestLocalization();
         app.UseRouting();

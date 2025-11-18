@@ -443,3 +443,7 @@ $RECYCLE.BIN/
 
 # ABP Framework
 **/Logs/**
+
+# Docker environment files
+.env
+.env.local

@@ -178,6 +178,58 @@ curl "https://localhost:5001/api/app/products?SkipCount=0&MaxResultCount=10"
 ✅ **依賴注入** - 使用 Autofac 容器  
 ✅ **日誌記錄** - 整合 Serilog
 
+## Docker 部署
+
+本專案支援 Docker 和 Docker Compose 部署，提供完整的容器化解決方案。
+
+### 快速開始
+
+使用 Docker Compose 快速啟動整個應用程式（包含 PostgreSQL）：
+
+```bash
+# 使用管理腳本（推薦）
+./docker-start.sh dev
+
+# 或直接使用 docker-compose
+docker-compose up -d
+```
+
+應用程式將在 http://localhost:5000 上啟動。
+
+### Docker 檔案說明
+
+- **Dockerfile** - PortalApi 應用程式的 Docker 映像檔
+- **Dockerfile.migrator** - 資料庫遷移工具的 Docker 映像檔
+- **docker-compose.yml** - Docker Compose 主配置檔
+- **docker-compose.override.yml** - 開發環境配置
+- **docker-compose.prod.yml** - 生產環境配置
+- **docker-start.sh** - Docker 管理腳本
+- **.env.example** - 環境變數範例檔案
+
+### 常用指令
+
+```bash
+# 開發模式啟動
+./docker-start.sh dev
+
+# 生產模式啟動
+POSTGRES_PASSWORD=your_password ./docker-start.sh prod
+
+# 停止服務
+./docker-start.sh stop
+
+# 查看日誌
+./docker-start.sh logs -f
+
+# 執行資料庫遷移
+./docker-start.sh migrate
+
+# 備份資料庫
+./docker-start.sh backup
+```
+
+詳細的 Docker 部署說明請參考 [DOCKER.md](DOCKER.md)。
+
 ## CI/CD
 
 本專案包含以下 GitHub Actions 工作流程：
