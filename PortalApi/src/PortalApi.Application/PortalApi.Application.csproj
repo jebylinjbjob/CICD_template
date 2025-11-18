@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Volo.Abp.AutoMapper" Version="8.2.1" />
+    <PackageReference Include="Volo.Abp.Ddd.Application" Version="8.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PortalApi.Domain\PortalApi.Domain.csproj" />
+    <ProjectReference Include="..\PortalApi.Application.Contracts\PortalApi.Application.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>
