@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  postgres:
+    environment:
+      # Production should use strong passwords from environment variables or secrets
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      # Production volume configuration
+      - postgres_prod_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  portalapi:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__Default=Host=postgres;Port=5432;Database=PortalApiDb;Username=postgres;Password=${POSTGRES_PASSWORD:-postgres}
+      - ASPNETCORE_HTTPS_PORT=8081
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+volumes:
+  postgres_prod_data:
+    driver: local

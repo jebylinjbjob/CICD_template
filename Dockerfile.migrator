@@ -1,0 +1,35 @@
+# Build stage
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+
+# Copy solution and project files
+COPY ["PortalApi.sln", "./"]
+COPY ["PortalApi/src/PortalApi.Domain.Shared/PortalApi.Domain.Shared.csproj", "PortalApi/src/PortalApi.Domain.Shared/"]
+COPY ["PortalApi/src/PortalApi.Domain/PortalApi.Domain.csproj", "PortalApi/src/PortalApi.Domain/"]
+COPY ["PortalApi/src/PortalApi.Application.Contracts/PortalApi.Application.Contracts.csproj", "PortalApi/src/PortalApi.Application.Contracts/"]
+COPY ["PortalApi/src/PortalApi.EntityFrameworkCore/PortalApi.EntityFrameworkCore.csproj", "PortalApi/src/PortalApi.EntityFrameworkCore/"]
+COPY ["PortalApi/src/PortalApi.DbMigrator/PortalApi.DbMigrator.csproj", "PortalApi/src/PortalApi.DbMigrator/"]
+
+# Restore dependencies
+RUN dotnet restore "PortalApi.sln"
+
+# Copy all source files
+COPY . .
+
+# Build the DbMigrator
+WORKDIR "/src/PortalApi/src/PortalApi.DbMigrator"
+RUN dotnet build "PortalApi.DbMigrator.csproj" -c Release -o /app/build
+
+# Publish stage
+FROM build AS publish
+RUN dotnet publish "PortalApi.DbMigrator.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
+WORKDIR /app
+
+# Copy published files from publish stage
+COPY --from=publish /app/publish .
+
+# Run the migrator
+ENTRYPOINT ["dotnet", "PortalApi.DbMigrator.dll"]
